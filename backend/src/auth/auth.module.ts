@@ -19,7 +19,7 @@ import { JwtAuthGuard } from './jwt-auth.guard';
         const secret = config.get<string>('JWT_SECRET');
         console.log('JwtModule factory: JWT_SECRET present?', !!secret); // <-- trazas
         return {
-          secret, // SI es undefined, aquí verás 'false'
+          secret, // SI ES undefined, aquí verás 'false'
           signOptions: { expiresIn: config.get<string>('JWT_EXPIRES') || '1h' },
         };
       },
