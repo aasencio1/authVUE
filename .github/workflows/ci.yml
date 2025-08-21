@@ -16,7 +16,10 @@ jobs:
     strategy:
       matrix:
         node-version: [22.15] # o 20.x si ya migraste
-
+        
+    defaults:
+      run:
+        working-directory: backend   # 👈 todo lo de npm correrá en /backend
     steps:
       - name: Checkout
         uses: actions/checkout@v4
