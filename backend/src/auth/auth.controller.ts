@@ -1,30 +1,30 @@
 import { Controller, Get, Req, Res, UseGuards } from '@nestjs/common';
-// Si ya creaste el guard de depuración, usa este import:
 import { GoogleAuthGuard } from './google.guard';
-// Si no lo has creado, comenta la línea de arriba y descomenta la siguiente:
-// import { AuthGuard } from '@nestjs/passport';
-
 import type { Request, Response } from 'express';
 import { AuthService } from './auth.service';
 import { JwtAuthGuard } from './jwt-auth.guard';
 
 @Controller('auth')
+
 export class AuthController {
   constructor(private auth: AuthService) {}
 
   @Get('google')
   // @UseGuards(AuthGuard('google'))
   @UseGuards(GoogleAuthGuard)
-  async googleAuth() {
-    return;
+  googleAuth(): void {
+    // Solo dispara el guard, no hace await
   }
 
-  @Get('google/callback')
-  // @UseGuards(AuthGuard('google'))
-  @UseGuards(GoogleAuthGuard)
-  async googleCallback(@Req() req: Request, @Res() res: Response) {
-    const user = (req as any).user;
 
+  @Get('google/callback')
+
+  // @UseGuards(AuthGuard('google'))
+  
+  @UseGuards(GoogleAuthGuard)
+  googleCallback(@Req() req: Request, @Res() res: Response) {
+    //const user = (req as any).user;
+    const user = req.user;
     if (!user) {
       // Si USAS GoogleAuthGuard, en consola verás info/err con la causa (redirect_uri_mismatch, invalid_client, etc.)
       console.error('Google callback: user is undefined. Revisa logs previos del guard.');

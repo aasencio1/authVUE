@@ -15,4 +15,7 @@ console.log('CALLBACK?', process.env.GOOGLE_CALLBACK_URL);
   app.use(cookieParser());
   await app.listen(process.env.PORT || 4000);
 }
-bootstrap();
+bootstrap().catch((err) => {
+  // log / process.exit(1) si quieres
+  console.error(err);
+});
