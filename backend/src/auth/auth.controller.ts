@@ -1,7 +1,7 @@
 import { Controller, Get, Req, Res, UseGuards } from '@nestjs/common';
 // Si ya creaste el guard de depuración, usa este import:
 import { GoogleAuthGuard } from './google.guard';
-// Si NO lo has creado, comenta la línea de arriba y descomenta la siguiente:
+// Si no lo has creado, comenta la línea de arriba y descomenta la siguiente:
 // import { AuthGuard } from '@nestjs/passport';
 
 import type { Request, Response } from 'express';
