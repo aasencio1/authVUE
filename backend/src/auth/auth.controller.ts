@@ -26,7 +26,7 @@ export class AuthController {
     const user = (req as any).user;
 
     if (!user) {
-      // Si usas GoogleAuthGuard, en consola verás info/err con la causa (redirect_uri_mismatch, invalid_client, etc.)
+      // Si USas GoogleAuthGuard, en consola verás info/err con la causa (redirect_uri_mismatch, invalid_client, etc.)
       console.error('Google callback: user is undefined. Revisa logs previos del guard.');
       return res.status(401).send({ message: 'Google auth failed. Check server logs.' });
     }
