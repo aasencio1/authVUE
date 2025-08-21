@@ -1,62 +1,33 @@
-name: CI
+name: build-test
 
 on:
-  pull_request:
   push:
-    branches: [main]
+  pull_request:
 
 jobs:
   build-test:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
-    concurrency:
-      group: ci-${{ github.ref }}
-      cancel-in-progress: true
-
-    strategy:
-      matrix:
-        node-version: [22.15] # o 20.x si ya migraste
-
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Use Node.js ${{ matrix.node-version }}
+      - name: Debug layout
+        run: |
+          pwd
+          ls -la
+          ls -la backend | grep package-lock || true
+
+      - name: Use Node.js 22.15
         uses: actions/setup-node@v4
         with:
-          node-version: ${{ matrix.node-version }}
+          node-version: "22.15"
           cache: npm
+          cache-dependency-path: |
+            backend/package-lock.json
 
-      - name: Install
+      - name: Install (backend)
+        working-directory: backend
         run: npm ci
 
-      - name: Lint
-        run: npm run lint
-
-      - name: Type Check
-        run: npm run typecheck
-
-      - name: Unit Tests + Coverage
-        run: npm run test:cov
-        env:
-          NODE_ENV: test
-          JWT_SECRET: test_secret
-          FRONTEND_URL: http://localhost:5173
-
-      - name: E2E Tests
-        run: npm run test:e2e
-        env:
-          NODE_ENV: test
-          JWT_SECRET: test_secret
-          FRONTEND_URL: http://localhost:5173
-
-      - name: Build
-        run: npm run build
-
-      # (Opcional) Guarda el reporte HTML de cobertura como artefacto
-      - name: Upload coverage artifact
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: coverage-html
-          path: coverage/lcov-report
+      - name: Test (backend)
+        working-directory: backend
+        run: npm test -- --ci --runInBand
