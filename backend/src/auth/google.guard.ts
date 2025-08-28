@@ -1,12 +1,19 @@
 // src/auth/google.guard.ts
-import { ExecutionContext, Injectable } from '@nestjs/common';
+import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
+// Ajusta la ruta del import según dónde tengas el tipo:
+import { GoogleUser } from './jwt.strategy'; // p.ej. '../auth/strategies/jwt.strategy'
 
 @Injectable()
 export class GoogleAuthGuard extends AuthGuard('google') {
-  handleRequest(err: any, user: any, info: any, _ctx: ExecutionContext) {
+  // Nota: si no usas `context`, no lo declares
+  handleRequest<TUser = GoogleUser>(err: any, user: any, info: any): TUser {
     if (err) console.error('GoogleAuth error:', err);
     if (info) console.error('GoogleAuth info:', info);
-    return user;
+
+    if (!user) {
+      throw new UnauthorizedException();
+    }
+    return user as TUser;
   }
 }

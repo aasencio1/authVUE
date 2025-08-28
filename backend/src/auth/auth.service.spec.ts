@@ -1,32 +1,39 @@
+// src/auth/auth.service.spec.ts
 import { Test, TestingModule } from '@nestjs/testing';
 import { JwtService } from '@nestjs/jwt';
 import { AuthService } from './auth.service';
 
+// Tipo mínimo para el usuario que firma el token
+type GoogleUser = {
+  googleId: string;
+  email: string;
+  name?: string;
+  photo?: string;
+};
 
 let service: AuthService;
 let jwtService: jest.Mocked<JwtService>;
 
-const jwtMock = {
-  sign: jest.fn(),
-} as unknown as jest.Mocked<JwtService>;
-
-
-
 beforeEach(async () => {
-  const module: TestingModule = await Test.createTestingModule({
+  const testingModule: TestingModule = await Test.createTestingModule({
     providers: [
       AuthService,
-      { provide: JwtService, useValue: jwtMock },
+      {
+        provide: JwtService,
+        useValue: {
+          sign: jest.fn(), // mock del método que usamos
+        },
+      },
     ],
   }).compile();
 
-  service = module.get<AuthService>(AuthService);
-  jwtService = module.get(JwtService);
+  service = testingModule.get<AuthService>(AuthService);
+  jwtService = testingModule.get(JwtService);
   jest.clearAllMocks();
 });
-// Caso de Prueba 1
+
 it('debe construir el payload correcto y firmarlo', () => {
-  const user = {
+  const user: GoogleUser = {
     googleId: 'g-123',
     email: 'user@gmail.com',
     name: 'User Test',
@@ -40,28 +47,31 @@ it('debe construir el payload correcto y firmarlo', () => {
     photo: user.photo,
   };
 
-  jwtService.sign.mockReturnValue('signed.jwt.token');
+  const signSpy = jest
+    .spyOn(jwtService, 'sign')
+    .mockReturnValue('signed.jwt.token');
 
   const token = service.signToken(user);
 
-  expect(jwtService.sign).toHaveBeenCalledTimes(1);
-  expect(jwtService.sign).toHaveBeenCalledWith(expectedPayload);
+  expect(signSpy).toHaveBeenCalledTimes(1);
+  expect(signSpy).toHaveBeenCalledWith(expectedPayload);
   expect(token).toBe('signed.jwt.token');
 });
-//Caso de Prueba 2
 
-it('debe tolerar campos opcionales en user (por ejemplo photo ausente)', () => {
-  const user = {
+it('debe tolerar campos opcionales (por ejemplo, photo ausente)', () => {
+  const user: GoogleUser = {
     googleId: 'g-456',
     email: 'no-photo@gmail.com',
     name: 'No Photo',
-  } as any;
+  };
 
-  jwtService.sign.mockReturnValue('another.token');
+  const signSpy = jest
+    .spyOn(jwtService, 'sign')
+    .mockReturnValue('another.token');
 
   const token = service.signToken(user);
 
-  expect(jwtService.sign).toHaveBeenCalledWith({
+  expect(signSpy).toHaveBeenCalledWith({
     sub: 'g-456',
     email: 'no-photo@gmail.com',
     name: 'No Photo',

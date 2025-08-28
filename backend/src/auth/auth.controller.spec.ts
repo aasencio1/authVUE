@@ -25,7 +25,7 @@ describe('AuthController (unit)', () => {
   });
 
   describe('googleCallback', () => {
-    it('debe responder 401 cuando req.user es undefined', async () => {
+    it('debe responder 401 cuando req.user es undefined', () => {
       // Mocks de Request/Response
       const req = { user: undefined } as unknown as Request;
 
@@ -34,9 +34,11 @@ describe('AuthController (unit)', () => {
       const res = { status, send } as unknown as Response;
 
       // Evitar ruido en consola (opcional)
-      const consoleSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+      const consoleSpy = jest
+        .spyOn(console, 'error')
+        .mockImplementation(() => {});
 
-      await controller.googleCallback(req, res);
+      controller.googleCallback(req, res);
 
       expect(status).toHaveBeenCalledWith(401);
       expect(send).toHaveBeenCalledWith({
@@ -47,7 +49,7 @@ describe('AuthController (unit)', () => {
       consoleSpy.mockRestore();
     });
 
-    it('debe firmar token y hacer redirect cuando req.user existe', async () => {
+    it('debe firmar token y hacer redirect cuando req.user existe', () => {
       const user = {
         googleId: 'g-123',
         email: 'user@gmail.com',
@@ -62,20 +64,21 @@ describe('AuthController (unit)', () => {
 
       authService.signToken.mockReturnValue('signed.jwt.token');
 
-      await controller.googleCallback(req, res);
+      controller.googleCallback(req, res);
 
       expect(authService.signToken).toHaveBeenCalledTimes(1);
       expect(authService.signToken).toHaveBeenCalledWith(user);
 
-      const expectedUrl =
-        `${process.env.FRONTEND_URL}/auth/success#token=signed.jwt.token`;
+      const expectedUrl = `${process.env.FRONTEND_URL}/auth/success#token=signed.jwt.token`;
       expect(redirect).toHaveBeenCalledWith(expectedUrl);
     });
   });
 
   describe('me', () => {
     it('debe devolver { user } desde req.user', () => {
-      const req = { user: { id: 1, email: 'u@test.com' } } as unknown as Request;
+      const req = {
+        user: { id: 1, email: 'u@test.com' },
+      } as unknown as Request;
 
       const result = controller.me(req);
 

@@ -1,37 +1,93 @@
 // src/auth/google.strategy.ts
 import { Injectable } from '@nestjs/common';
 import { PassportStrategy } from '@nestjs/passport';
-import { Profile, Strategy } from 'passport-google-oauth20';
+import { Strategy } from 'passport-google-oauth20';
+
+export type GoogleUser = {
+  provider: 'google';
+  googleId: string;
+  email: string | null;
+  name: string | null;
+  photo: string | null;
+};
+
+// ------ Type guards / helpers SIN `any` ------
+function isObject(v: unknown): v is Record<string, unknown> {
+  return typeof v === 'object' && v !== null;
+}
+
+function firstStringFromValueArray(arr: unknown): string | null {
+  if (!Array.isArray(arr) || arr.length === 0) return null;
+  // ⚠️ Importante: indexar como unknown[] para evitar `any`
+  const first: unknown = (arr as unknown[])[0];
+  if (!isObject(first)) return null;
+  const val = (first as { value?: unknown }).value;
+  return typeof val === 'string' && val.length > 0 ? val : null;
+}
+
+function toNonEmptyString(v: unknown): string | null {
+  return typeof v === 'string' && v.length > 0 ? v : null;
+}
 
 @Injectable()
 export class GoogleStrategy extends PassportStrategy(Strategy, 'google') {
   constructor() {
+    const clientID = process.env.GOOGLE_CLIENT_ID;
+    const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
+    const callbackURL = process.env.GOOGLE_CALLBACK_URL;
+
+    if (!clientID || !clientSecret || !callbackURL) {
+      throw new Error('Missing GOOGLE_* env vars');
+    }
+
+    // Algunas configs estrictas marcan `super(...)` como unsafe-call.
+    // Deshabilitamos SOLO esta línea.
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-call
     super({
-      clientID: process.env.GOOGLE_CLIENT_ID!,
-      clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
-      callbackURL: process.env.GOOGLE_CALLBACK_URL!,
+      clientID,
+      clientSecret,
+      callbackURL,
       scope: ['profile', 'email'],
     });
   }
 
-  async validate(_at: string, _rt: string, profile: Profile) {
-    const rawPhoto = profile.photos?.[0]?.value;
-    // Aumenta tamaño si viene como "=s96-c"; si no trae query, agrega "?sz=200"
-    let photo = rawPhoto;
-    if (photo) {
-      if (/=s\d+-c/.test(photo)) {
-        photo = photo.replace(/=s\d+-c/, '=s200-c');
-      } else if (!/[?&]sz=/.test(photo)) {
-        photo += (photo.includes('?') ? '&' : '?') + 'sz=200';
-      }
+  validate(
+    _accessToken: string,
+    _refreshToken: string,
+    profile: unknown,
+  ): GoogleUser {
+    void _accessToken;
+    void _refreshToken;
+
+    // profile debe ser objeto
+    if (!isObject(profile)) {
+      throw new Error('Invalid Google profile: not an object');
     }
 
-    const email = profile.emails?.[0]?.value;
+    // id como string no vacío
+    const idVal = (profile as { id?: unknown }).id;
+    const googleId = toNonEmptyString(idVal);
+    if (!googleId) {
+      throw new Error('Invalid Google profile: missing id');
+    }
+
+    // email
+    const emails = (profile as { emails?: unknown }).emails;
+    const email = firstStringFromValueArray(emails);
+
+    // photo (sin normalizaciones para evitar llamadas sospechosas)
+    const photos = (profile as { photos?: unknown }).photos;
+    const photo = firstStringFromValueArray(photos);
+
+    // displayName
+    const displayNameRaw = (profile as { displayName?: unknown }).displayName;
+    const name = toNonEmptyString(displayNameRaw);
+
     return {
       provider: 'google',
-      googleId: profile.id,
+      googleId,
       email,
-      name: profile.displayName,
+      name,
       photo,
     };
   }

@@ -1,3 +1,5 @@
-git rm --cached .husky/pre-commit
-printf '#!/usr/bin/env sh\n. "$(dirname -- "$0")/_/husky.sh"\n\nnpm --prefix backend run lint\nnpm --prefix backend test\n' > .husky/pre-commit
+#!/usr/bin/env sh
+. "$(dirname -- "$0")/_/husky.sh"
 
+npm --prefix backend run lint
+npm --prefix backend test

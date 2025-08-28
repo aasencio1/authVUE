@@ -1,53 +1,85 @@
 // test/app.e2e-spec.ts
 import { Test, TestingModule } from '@nestjs/testing';
-import { INestApplication } from '@nestjs/common';
+import {
+  INestApplication,
+  ExecutionContext,
+  UnauthorizedException,
+} from '@nestjs/common';
+import type { Server } from 'http';
 import request from 'supertest';
 import { AppModule } from '../src/app.module';
-
-import { ExecutionContext, UnauthorizedException } from '@nestjs/common';
 import { GoogleAuthGuard } from '../src/auth/google.guard';
 import { JwtAuthGuard } from '../src/auth/jwt-auth.guard';
+import { Request } from 'express';
+
+// Tipos usados en los tests (ajusta si tus controladores usan otros)
+type GoogleUser = {
+  googleId: string;
+  email: string;
+  name: string;
+  photo?: string;
+};
+
+type JwtUser = {
+  id: number;
+  email: string;
+};
+
+/** Helpers de seguridad de tipos para evitar `any` */
+function isObject(v: unknown): v is Record<string, unknown> {
+  return typeof v === 'object' && v !== null;
+}
+function isJwtUser(v: unknown): v is JwtUser {
+  return isObject(v) && typeof v.id === 'number' && typeof v.email === 'string';
+}
+/** Tipado seguro del http server para supertest */
+function asHttpServer(v: unknown): Server {
+  if (!v || typeof (v as { listen?: unknown }).listen !== 'function') {
+    throw new Error('Invalid http.Server');
+  }
+  return v as Server;
+}
 
 describe('App E2E (Auth)', () => {
   let app: INestApplication;
 
-  // Estado mutable para simular distintos escenarios en los guards
+  // Estado mutable para simular escenarios
   const state: {
-  googleUser?: { googleId: string; email: string; name: string; photo?: string } | null;
-  jwtUser?: any;
-  jwtAllow: boolean;
-} = {
-  googleUser: undefined,
-  jwtUser: undefined,
-  jwtAllow: false,
-};
+    googleUser?: GoogleUser | null;
+    jwtUser?: JwtUser;
+    jwtAllow: boolean;
+  } = {
+    googleUser: undefined,
+    jwtUser: undefined,
+    jwtAllow: false,
+  };
 
-let errorSpy: jest.SpyInstance; // <-- ADDED
-  // Mock guard de Google: si hay state.googleUser, la inyecta en req.user
+  let errorSpy: jest.SpyInstance;
+
+  // Mock guard de Google: inyecta req.user si hay state.googleUser
   const GoogleGuardMock = {
-    canActivate(ctx: ExecutionContext) {
-      const req = ctx.switchToHttp().getRequest();
+    canActivate(ctx: ExecutionContext): boolean {
+      const req = ctx
+        .switchToHttp()
+        .getRequest<Request & { user?: GoogleUser }>(); // <- tipa Request
       if (state.googleUser) req.user = state.googleUser;
-      return true; // deja pasar para que el controller maneje
+      return true;
     },
   };
 
   // Mock guard de JWT: permite o no, e inyecta req.user si corresponde
-   
   const JwtGuardMock = {
-  canActivate(ctx: ExecutionContext) {
-    if (!state.jwtAllow) {
-      // Para emular AuthGuard('jwt') de Passport → 401 Unauthorized
-      throw new UnauthorizedException();
-    }
-    const req = ctx.switchToHttp().getRequest();
-    if (state.jwtUser) req.user = state.jwtUser;
-    return true;
-  },
-};
+    canActivate(ctx: ExecutionContext): boolean {
+      if (!state.jwtAllow) {
+        throw new UnauthorizedException();
+      }
+      const req = ctx.switchToHttp().getRequest<Request & { user?: JwtUser }>(); // <- tipa Request
+      if (state.jwtUser) req.user = state.jwtUser;
+      return true;
+    },
+  };
 
   beforeAll(async () => {
-    // FRONTEND_URL que tu controller usa para redirigir
     process.env.FRONTEND_URL = 'http://localhost:5173';
 
     const moduleFixture: TestingModule = await Test.createTestingModule({
@@ -61,22 +93,25 @@ let errorSpy: jest.SpyInstance; // <-- ADDED
 
     app = moduleFixture.createNestApplication();
 
-    app.useLogger(false);                 // <-- ADDED: apaga logger de Nest en E2E
-    errorSpy = jest                       // <-- ADDED: silencia console.error
-      .spyOn(console, 'error')
-      .mockImplementation(() => {});
+    app.useLogger(false);
+    // Evita no-empty-function: retorna undefined explícitamente
+    errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {
+      return undefined as unknown as void;
+    });
     await app.init();
   });
 
   afterAll(async () => {
-    errorSpy?.mockRestore();              // <-- ADDED: restaura console.error
+    errorSpy?.mockRestore();
     await app.close();
   });
 
   describe('/auth/google/callback (GET)', () => {
     it('401 cuando NO hay req.user (fallo en Google)', async () => {
       state.googleUser = null; // no inyectar user
-      const res = await request(app.getHttpServer())
+      const server = asHttpServer(app.getHttpServer());
+
+      const res = await request(server)
         .get('/auth/google/callback')
         .expect(401);
 
@@ -93,16 +128,16 @@ let errorSpy: jest.SpyInstance; // <-- ADDED
         photo: 'http://photo/avatar.png',
       };
 
-      const res = await request(app.getHttpServer())
+      const server = asHttpServer(app.getHttpServer());
+
+      const res = await request(server)
         .get('/auth/google/callback')
         .expect(302);
 
-      // Verifica la URL de redirección que arma el controller
+      // Usa API tipada de supertest para el header
+      const location = res.get('Location') ?? '';
       const expected = `${process.env.FRONTEND_URL}/auth/success#token=`;
-      expect(res.headers.location.startsWith(expected)).toBe(true);
-
-      // (Opcional) podrías decodificar el fragmento y validar forma,
-      // pero aquí basta con verificar prefijo de la URL
+      expect(location.startsWith(expected)).toBe(true);
     });
   });
 
@@ -111,21 +146,33 @@ let errorSpy: jest.SpyInstance; // <-- ADDED
       state.jwtAllow = false;
       state.jwtUser = undefined;
 
-      await request(app.getHttpServer())
-        .get('/auth/me')
-        .expect(401);
+      const server = asHttpServer(app.getHttpServer());
+      await request(server).get('/auth/me').expect(401);
     });
 
     it('200 y devuelve { user } cuando el JwtAuthGuard permite', async () => {
       state.jwtAllow = true;
       state.jwtUser = { id: 1, email: 'u@test.com' };
 
-      const res = await request(app.getHttpServer())
+      const server = asHttpServer(app.getHttpServer());
+
+      const res = await request(server)
         .get('/auth/me')
-        .set('Authorization', 'Bearer dummy') // simulado
+        .set('Authorization', 'Bearer dummy')
         .expect(200);
 
-      expect(res.body).toEqual({ user: { id: 1, email: 'u@test.com' } });
+      // Evitar no-unsafe-assignment: tratar body como unknown y validar
+      const bodyUnknown: unknown = res.body;
+      if (
+        !isObject(bodyUnknown) ||
+        !('user' in bodyUnknown) ||
+        !isJwtUser((bodyUnknown as { user?: unknown }).user)
+      ) {
+        throw new Error('Unexpected response body shape');
+      }
+      const body = bodyUnknown as { user: JwtUser };
+
+      expect(body).toEqual({ user: { id: 1, email: 'u@test.com' } });
     });
   });
 });
