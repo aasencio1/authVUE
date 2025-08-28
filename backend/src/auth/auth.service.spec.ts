@@ -46,7 +46,7 @@ beforeEach(async () => {
   }).compile();
 
   service = testingModule.get<AuthService>(AuthService);
-  jwtService = testingModule.get(JwtService) as jest.Mocked<JwtService>;
+  jwtService = testingModule.get(JwtService);
   jest.clearAllMocks();
 });
 

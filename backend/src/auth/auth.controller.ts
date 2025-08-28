@@ -12,8 +12,9 @@ type ReqWithUserRequired = Request & { user: AuthenticatedUser };
 @Controller('auth')
 export class AuthController {
   private readonly logger = new Logger(AuthController.name);
+  private readonly isTestEnv = process.env.NODE_ENV === 'test';
 
-  constructor(private auth: AuthService) {}
+  constructor(private readonly auth: AuthService) {}
 
   @Get('google')
   @UseGuards(GoogleAuthGuard)
@@ -23,37 +24,32 @@ export class AuthController {
 
   @Get('google/callback')
   @UseGuards(GoogleAuthGuard)
-  /*googleCallback(@Req() req: ReqWithUser, @Res() res: Response): Response {
-    const user = req.user;
-    if (!user) {
-      this.logger.error(
-        'Google callback: user is undefined. Revisa logs del guard.',
-      );
-      return res
-        .status(401)
-        .send({ message: 'Google auth failed. Check server logs.' });
-    }
-
-    const token = this.auth.signToken(user);
-    const redirect = `${process.env.FRONTEND_URL}/auth/success#token=${token}`;
-    return res.redirect(redirect);
-  }*/
   googleCallback(@Req() req: ReqWithUser, @Res() res: Response): void {
     const user = req.user;
+
     if (!user) {
-      this.logger.error(
-        'Google callback: user is undefined. Revisa logs del guard.',
-      );
+      if (!this.isTestEnv) {
+        this.logger.error(
+          'Google callback: user is undefined. Revisa logs del guard.',
+        );
+      }
       res
         .status(401)
-        .send({ message: 'Google auth failed. Check server logs.' });
+        .send({ message: 'Google auth failed. Check server logs.' }); // <-- send en lugar de json
+      return;
+    }
+
+    const frontend = process.env.FRONTEND_URL;
+    if (!frontend) {
+      if (!this.isTestEnv) {
+        this.logger.error('FRONTEND_URL no está configurada.');
+      }
+      res.status(500).send({ message: 'Server misconfigured.' }); // <-- send
       return;
     }
 
     const token = this.auth.signToken(user);
-    const redirect = `${process.env.FRONTEND_URL}/auth/success#token=${token}`;
-
-    // ✅ NO devolver el resultado; solo llamar y terminar
+    const redirect = `${frontend}/auth/success#token=${token}`;
     res.redirect(redirect);
   }
 
