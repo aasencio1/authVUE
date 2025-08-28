@@ -74,9 +74,7 @@ describe('App E2E (Auth)', () => {
       if (!state.jwtAllow) {
         throw new UnauthorizedException();
       }
-      const req = ctx
-        .switchToHttp()
-        .getRequest<Request & { user?: JwtUser }>(); // <- tipa Request
+      const req = ctx.switchToHttp().getRequest<Request & { user?: JwtUser }>(); // <- tipa Request
       if (state.jwtUser) req.user = state.jwtUser;
       return true;
     },

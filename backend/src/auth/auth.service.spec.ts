@@ -2,6 +2,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { JwtService } from '@nestjs/jwt';
 import { AuthService } from './auth.service';
+import { Logger } from '@nestjs/common';
 
 // Tipo mínimo para el usuario que firma el token
 type GoogleUser = {
@@ -13,6 +14,23 @@ type GoogleUser = {
 
 let service: AuthService;
 let jwtService: jest.Mocked<JwtService>;
+let errorSpy: jest.SpyInstance;
+
+beforeAll(() => {
+  // Silencia el logger global de Nest en este spec
+  Logger.overrideLogger(false);
+  // Evita ruido en consola si algún otro test hace console.error
+  errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {
+    return undefined as unknown as void;
+  });
+});
+
+afterAll(() => {
+  // Restaura el spy del console.error
+  errorSpy?.mockRestore();
+  // (opcional) podrías reactivar el logger si fuera necesario:
+  // Logger.overrideLogger(true as any);
+});
 
 beforeEach(async () => {
   const testingModule: TestingModule = await Test.createTestingModule({
@@ -28,7 +46,7 @@ beforeEach(async () => {
   }).compile();
 
   service = testingModule.get<AuthService>(AuthService);
-  jwtService = testingModule.get(JwtService);
+  jwtService = testingModule.get(JwtService) as jest.Mocked<JwtService>;
   jest.clearAllMocks();
 });
 
@@ -63,6 +81,7 @@ it('debe tolerar campos opcionales (por ejemplo, photo ausente)', () => {
     googleId: 'g-456',
     email: 'no-photo@gmail.com',
     name: 'No Photo',
+    // photo ausente
   };
 
   const signSpy = jest
