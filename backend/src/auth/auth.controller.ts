@@ -2,11 +2,11 @@
 import { Controller, Get, Req, Res, UseGuards, Logger } from '@nestjs/common';
 import { GoogleAuthGuard } from './google.guard';
 import type { Request, Response } from 'express';
-import { AuthService } from './auth.service';
 import { JwtAuthGuard } from './jwt-auth.guard';
 import { AuthenticatedUser } from './types';
+import { AuthService } from './auth.service';
 
-type ReqWithUser = Request & { user?: AuthenticatedUser };
+type ReqWithUser = Request & { user?: AuthenticatedUser | undefined };
 type ReqWithUserRequired = Request & { user: AuthenticatedUser };
 
 @Controller('auth')

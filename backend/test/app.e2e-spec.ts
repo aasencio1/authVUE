@@ -4,7 +4,7 @@ import {
   INestApplication,
   ExecutionContext,
   UnauthorizedException,
-  Logger, // 👈 para silenciar logs en tests
+  Logger,
 } from '@nestjs/common';
 import type { Server } from 'http';
 import request from 'supertest';
@@ -44,14 +44,14 @@ function asHttpServer(v: unknown): Server {
 describe('App E2E (Auth)', () => {
   let app: INestApplication;
 
-  // Estado mutable para simular escenarios
+  // Estado mutable para simular escenarios (sin opcionales + usando null)
   const state: {
-    googleUser?: GoogleUser | null;
-    jwtUser?: JwtUser;
+    googleUser: GoogleUser | null;
+    jwtUser: JwtUser | null;
     jwtAllow: boolean;
   } = {
-    googleUser: undefined,
-    jwtUser: undefined,
+    googleUser: null,
+    jwtUser: null,
     jwtAllow: false,
   };
 
@@ -62,7 +62,7 @@ describe('App E2E (Auth)', () => {
     canActivate(ctx: ExecutionContext): boolean {
       const req = ctx
         .switchToHttp()
-        .getRequest<Request & { user?: GoogleUser }>(); // <- tipa Request
+        .getRequest<Request & { user?: GoogleUser }>();
       if (state.googleUser) req.user = state.googleUser;
       return true;
     },
@@ -74,23 +74,23 @@ describe('App E2E (Auth)', () => {
       if (!state.jwtAllow) {
         throw new UnauthorizedException();
       }
-      const req = ctx.switchToHttp().getRequest<Request & { user?: JwtUser }>(); // <- tipa Request
+      const req = ctx.switchToHttp().getRequest<Request & { user?: JwtUser }>();
       if (state.jwtUser) req.user = state.jwtUser;
       return true;
     },
   };
 
-  // 👇 Reset del estado entre pruebas para evitar contaminación
+  // Reset del estado entre pruebas
   beforeEach(() => {
-    state.googleUser = undefined;
-    state.jwtUser = undefined;
+    state.googleUser = null;
+    state.jwtUser = null;
     state.jwtAllow = false;
   });
 
   beforeAll(async () => {
     process.env.FRONTEND_URL = 'http://localhost:5173';
 
-    // 🔇 Silencia el logger global de Nest en pruebas
+    // Silencia el logger global de Nest en pruebas
     Logger.overrideLogger(false);
 
     const moduleFixture: TestingModule = await Test.createTestingModule({
@@ -104,7 +104,7 @@ describe('App E2E (Auth)', () => {
 
     app = moduleFixture.createNestApplication();
 
-    app.useLogger(false); // redundante pero inofensivo junto a overrideLogger(false)
+    app.useLogger(false);
 
     // Evita no-empty-function: retorna undefined explícitamente
     errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {
@@ -147,7 +147,6 @@ describe('App E2E (Auth)', () => {
         .get('/auth/google/callback')
         .expect(302);
 
-      // Usa API tipada de supertest para el header
       const location = res.get('Location') ?? '';
       const expected = `${process.env.FRONTEND_URL}/auth/success#token=`;
       expect(location.startsWith(expected)).toBe(true);
@@ -157,7 +156,7 @@ describe('App E2E (Auth)', () => {
   describe('/auth/me (GET)', () => {
     it('401 cuando el JwtAuthGuard NO permite', async () => {
       state.jwtAllow = false;
-      state.jwtUser = undefined;
+      state.jwtUser = null;
 
       const server = asHttpServer(app.getHttpServer());
       await request(server).get('/auth/me').expect(401);
@@ -174,7 +173,6 @@ describe('App E2E (Auth)', () => {
         .set('Authorization', 'Bearer dummy')
         .expect(200);
 
-      // Evitar no-unsafe-assignment: tratar body como unknown y validar
       const bodyUnknown: unknown = res.body;
       if (
         !isObject(bodyUnknown) ||

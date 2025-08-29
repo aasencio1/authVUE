@@ -1,20 +1,7 @@
 // src/auth/auth.service.ts
 import { Injectable } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
-
-export type GoogleUser = {
-  googleId: string;
-  email: string;
-  name?: string;
-  photo?: string;
-};
-
-export type JwtPayload = {
-  sub: string;
-  email: string;
-  name?: string;
-  photo?: string;
-};
+import type { GoogleUser, JwtPayload } from './types'; // 👈 usa los tipos compartidos
 
 @Injectable()
 export class AuthService {
@@ -24,9 +11,10 @@ export class AuthService {
     const payload: JwtPayload = {
       sub: user.googleId,
       email: user.email,
-      name: user.name ?? '',
-      photo: user.photo,
+      ...(user.name !== undefined ? { name: user.name } : {}),
+      ...(user.photo !== undefined ? { photo: user.photo } : {}),
     };
+
     return this.jwt.sign(payload);
   }
 }
