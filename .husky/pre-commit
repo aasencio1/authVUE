@@ -3,3 +3,4 @@ npm --prefix backend run format
 npm --prefix backend run lint
 npm --prefix backend run type-check
 npm --prefix backend test
+npm -C backend audit --audit-level=high --omit=dev     # 👈 audit con -C

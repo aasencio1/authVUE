@@ -31,8 +31,8 @@ jobs:
         run: npm ci
 
       # ---- Calidad de código ----
-      - name: Format (backend)
-        run: npm run format
+      - name: Format check (backend)
+        run: npm run format:check
 
       - name: Lint (backend)
         run: npm run lint
@@ -40,10 +40,13 @@ jobs:
       - name: Type-check (backend)
         run: npm run type-check
 
+      - name: Build (backend)
+        run: npm run build
+
       # ---- Tests ----
       - name: Test (backend)
         run: npm test -- --ci --runInBand
-        # Si quieres cobertura, cambia por:
+        # Si quieres cobertura:
         # run: npm test -- --ci --coverage --runInBand
 
       # (Opcional) Subir cobertura como artifact
