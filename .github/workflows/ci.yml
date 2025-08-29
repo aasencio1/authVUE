@@ -7,6 +7,10 @@ on:
 jobs:
   build-test:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+
     steps:
       - uses: actions/checkout@v4
 
@@ -21,13 +25,38 @@ jobs:
         with:
           node-version: "22.15"
           cache: npm
-          cache-dependency-path: |
-            backend/package-lock.json
+          cache-dependency-path: backend/package-lock.json
 
       - name: Install (backend)
-        working-directory: backend
         run: npm ci
 
+      # ---- Calidad de código ----
+      - name: Lint (backend)
+        run: npm run lint
+
+      # (Opcional) Verificación de formato si tienes script "format:check"
+      # - name: Format check
+      #   run: npm run format:check
+
+      # (Opcional) Type-check si tienes script "typecheck" (tsc --noEmit)
+      # - name: Type-check
+      #   run: npm run typecheck
+
+      # (Opcional) Build si tienes script "build"
+      # - name: Build
+      #   run: npm run build
+
+      # ---- Tests ----
       - name: Test (backend)
-        working-directory: backend
         run: npm test -- --ci --runInBand
+        # (Opcional) añade --coverage si ya configuraste cobertura:
+        # run: npm test -- --ci --coverage --runInBand
+
+      # (Opcional) Subir cobertura como artifact
+      # - name: Upload coverage artifact
+      #   if: always()
+      #   uses: actions/upload-artifact@v4
+      #   with:
+      #     name: coverage
+      #     path: backend/coverage
+
