@@ -20,7 +20,10 @@
     "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand",
     "test:e2e": "jest --config ./test/jest-e2e.json",
     "prepare": "husky",
-    "type-check": "tsc --noEmit"
+    "type-check": "tsc --noEmit",
+    "audit:ci": "npm audit --audit-level=high --omit=dev",
+    "deps:preview": "npx npm-check-updates",
+    "deps:update": "npx npm-check-updates -u && npm ci && npm test"
   },
   "dependencies": {
     "@nestjs/common": "^11.0.1",
