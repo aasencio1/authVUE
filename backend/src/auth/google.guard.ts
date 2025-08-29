@@ -9,8 +9,6 @@ export class GoogleAuthGuard extends AuthGuard('google') {
     err: unknown,
     user: unknown,
     info: unknown,
-    _context?: unknown, // 👈 prefijo _
-    _status?: unknown,  // 👈 prefijo _
   ): TUser {
     if (err) console.error('GoogleAuth error:', err);
     if (info) console.error('GoogleAuth info:', info);
