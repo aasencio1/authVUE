@@ -4,7 +4,7 @@ import { ConfigModule } from '@nestjs/config';
 //import { AppService } from './app.service';
 import { AuthModule } from './auth/auth.module';
 
-/*@Module({
+/*@Module({ Example
   imports: [AuthModule],
   controllers: [AppController],
   providers: [AppService],
@@ -14,7 +14,7 @@ import { AuthModule } from './auth/auth.module';
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
-      envFilePath: '.env',
+      envFilePath:  '.env',
     }), // lee .env
     AuthModule,
   ],
