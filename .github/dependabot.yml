@@ -1,0 +1,33 @@
+# .github/dependabot.yml
+version: 2
+updates:
+  # 1) NPM en /backend
+  - package-ecosystem: npm
+    directory: /backend
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+    open-pull-requests-limit: 5
+    labels: ["deps", "npm"]
+    # Estrategia sugerida: 'auto' respeta semver y propone patch/minor sin romper
+    versioning-strategy: auto
+    # (Opcional) Ignora majors de ciertos paquetes durante la fase inicial
+    ignore:
+      - dependency-name: "@nestjs/*"
+        update-types: ["version-update:semver-major"]
+    # (Opcional) Agrupa tooling para menos ruido
+    groups:
+      tooling:
+        patterns:
+          - "eslint*"
+          - "typescript*"
+          - "@typescript-eslint/*"
+          - "prettier*"
+
+  # 2) Workflows de GitHub Actions en la raíz
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    labels: ["deps", "gha"]

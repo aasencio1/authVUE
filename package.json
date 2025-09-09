@@ -1,0 +1,14 @@
+{
+  "devDependencies": {
+    "husky": "^9.1.7"
+  },
+  "scripts": {
+    "prepare": "husky",
+
+    "build": "npm --prefix backend run build",
+    "type-check": "npm --prefix backend run type-check",
+    "lint": "npm --prefix backend run lint",
+    "format:check": "npm --prefix backend run format:check",
+    "test:ci": "npm --prefix backend run test -- --ci --runInBand"
+  }
+}
