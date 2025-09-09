@@ -3,8 +3,7 @@
     "husky": "^9.1.7"
   },
   "scripts": {
-    "prepare": "husky",
-
+    "prepare": "husky install",
     "build": "npm --prefix backend run build",
     "type-check": "npm --prefix backend run type-check",
     "lint": "npm --prefix backend run lint",

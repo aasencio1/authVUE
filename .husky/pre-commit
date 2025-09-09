@@ -1,4 +1,6 @@
 # .husky/pre-commit  (desde la RAÍZ del repo)
+. "$(dirname -- "$0")/_/husky.sh"
+set -e
 npm --prefix backend run format
 npm --prefix backend run lint
 npm --prefix backend run type-check
