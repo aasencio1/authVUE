@@ -1,7 +1,8 @@
 // src/auth/auth.service.ts
 import { Injectable } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
-import type { GoogleUser, JwtPayload } from './types'; // 👈 usa los tipos compartidos
+import type { GoogleUser, JwtPayload } from './types'; // 👈 usa los tipos 
+// compartidos
 
 @Injectable()
 export class AuthService {
