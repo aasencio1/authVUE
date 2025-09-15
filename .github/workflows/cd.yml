@@ -1,0 +1,49 @@
+name: CD Manual - Delivery or Deployment
+
+on:
+  workflow_dispatch:
+    inputs:
+      deploy_mode:
+        description: "Tipo de despacho"
+        required: true
+        default: "delivery"
+        type: choice
+        options:
+          - delivery
+          - deployment
+
+env:
+  NODE_ENV: production
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout código
+        uses: actions/checkout@v3
+
+      - name: Instalar dependencias
+        run: npm install
+
+      - name: Compilar aplicación
+        run: npm run build
+
+      - name: Empaquetar artefacto (opcional)
+        run: tar -czf app.tar.gz dist/
+
+  deploy:
+    needs: build
+    if: ${{ github.event.inputs.deploy_mode == 'deployment' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout código
+        uses: actions/checkout@v3
+
+      - name: Configurar entorno de despliegue
+        run: echo "Preparando deploy a producción..."
+
+      - name: Desplegar aplicación (aquí tu lógica real)
+        run: |
+          echo "Realizando deploy automático..."
+          # Ejemplo: scp app.tar.gz user@host:/ruta
+          # Ejemplo: curl -X POST https://tu-api-deploy
