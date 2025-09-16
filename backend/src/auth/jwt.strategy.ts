@@ -1,32 +1,35 @@
 // src/auth/jwt.strategy.ts
 import { Injectable } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { PassportStrategy } from '@nestjs/passport';
 import { ExtractJwt, Strategy } from 'passport-jwt';
-import { ConfigService } from '@nestjs/config';
-import type { JwtPayload, AuthenticatedUser } from './types';
+
+export type JwtPayload = {
+  sub: string | number;
+  email?: string;
+  roles?: string[];
+};
 
 @Injectable()
-export class JwtStrategy extends PassportStrategy(Strategy) {
-  constructor(config: ConfigService) {
+export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
+  constructor(private readonly config: ConfigService) {
     const secret = config.get<string>('JWT_SECRET');
     if (!secret) {
-      throw new Error('JWT_SECRET is not set');
+      throw new Error('JWT_SECRET no está definido en el entorno (.env)');
     }
 
     super({
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
       ignoreExpiration: false,
-      secretOrKey: secret,
+      secretOrKey: secret, // <- ahora es string, no undefined
     });
   }
 
-  // 👇 Devolver AuthenticatedUser (no GoogleUser)
-  validate(payload: JwtPayload): AuthenticatedUser {
+  validate(payload: JwtPayload) {
     return {
-      googleId: payload.sub,
+      userId: payload.sub,
       email: payload.email,
-      ...(payload.name !== undefined ? { name: payload.name } : {}),
-      ...(payload.photo !== undefined ? { photo: payload.photo } : {}),
+      roles: payload.roles ?? [],
     };
   }
 }

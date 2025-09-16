@@ -1,38 +1,35 @@
+// src/auth/auth.module.ts
 import { Module } from '@nestjs/common';
-import { PassportModule } from '@nestjs/passport';
-import { JwtModule, JwtModuleOptions } from '@nestjs/jwt'; // 👈 importa el tipo
+import { JwtModule, JwtModuleOptions } from '@nestjs/jwt';
 import { ConfigModule, ConfigService } from '@nestjs/config';
+import { PassportModule } from '@nestjs/passport';
 import { AuthService } from './auth.service';
 import { AuthController } from './auth.controller';
-import { GoogleStrategy } from './google.strategy';
 import { JwtStrategy } from './jwt.strategy';
-import { JwtAuthGuard } from './jwt-auth.guard';
+import { GoogleStrategy } from './google.strategy'; // <-- AÑADE ESTO
 
 @Module({
   imports: [
     ConfigModule,
-    PassportModule.register({ session: false }),
+    PassportModule.register({ defaultStrategy: 'jwt', session: false }),
     JwtModule.registerAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
       useFactory: (config: ConfigService): JwtModuleOptions => {
-        // 👈 tipa retorno
-        // Opción A (recomendada, Nest v2): usa getOrThrow
-        const secret = config.get<string>('JWT_SECRET'); // o: config.getOrThrow<string>('JWT_SECRET');
-        if (!secret) {
-          throw new Error('JWT_SECRET is not set'); // 👈 garantiza que no sea undefined
-        }
-
-        return {
-          secret, // ahora es string
-          signOptions: {
-            expiresIn: config.get<string>('JWT_EXPIRES') ?? '1h',
-          },
-        };
+        const secret = config.get<string>('JWT_SECRET');
+        const expiresIn = config.get<string>('JWT_EXPIRES_IN', '1h');
+        if (!secret)
+          throw new Error('JWT_SECRET no está definido en el entorno (.env)');
+        return { secret, signOptions: { expiresIn } };
       },
     }),
   ],
-  providers: [AuthService, GoogleStrategy, JwtStrategy, JwtAuthGuard],
   controllers: [AuthController],
+  providers: [
+    AuthService,
+    JwtStrategy,
+    GoogleStrategy, // <-- CLAVE: registra la estrategia 'google'
+  ],
+  exports: [AuthService, JwtModule],
 })
 export class AuthModule {}

@@ -1,56 +1,53 @@
-// src/auth/google.strategy.ts
-import { Injectable, UnauthorizedException } from '@nestjs/common';
-import { PassportStrategy } from '@nestjs/passport';
-import { Strategy, Profile } from 'passport-google-oauth20';
+import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import type { AuthenticatedUser } from './types';
+import { PassportStrategy } from '@nestjs/passport';
+import { Strategy, Profile, VerifyCallback } from 'passport-google-oauth20';
 
 @Injectable()
 export class GoogleStrategy extends PassportStrategy(Strategy, 'google') {
-  constructor(config: ConfigService) {
+  constructor(private readonly config: ConfigService) {
     const clientID = config.get<string>('GOOGLE_CLIENT_ID');
     const clientSecret = config.get<string>('GOOGLE_CLIENT_SECRET');
     const callbackURL = config.get<string>('GOOGLE_CALLBACK_URL');
 
+    // Logs de diagnóstico (temporal)
+    console.log(
+      '[GoogleStrategy] has CLIENT_ID?',
+      !!clientID,
+      'has SECRET?',
+      !!clientSecret,
+      'callback',
+      callbackURL,
+    );
+
     if (!clientID || !clientSecret || !callbackURL) {
-      throw new Error('Missing GOOGLE_* env vars');
+      throw new Error(
+        'Faltan GOOGLE_CLIENT_ID/GOOGLE_CLIENT_SECRET/GOOGLE_CALLBACK_URL en .env',
+      );
     }
 
     super({
       clientID,
       clientSecret,
       callbackURL,
-      scope: ['profile', 'email'],
+      scope: ['email', 'profile'],
     });
   }
 
   validate(
-    _accessToken: string,
-    _refreshToken: string,
+    accessToken: string,
+    refreshToken: string,
     profile: Profile,
-  ): AuthenticatedUser {
-    const googleId = profile.id;
-    if (!googleId) {
-      throw new UnauthorizedException('Invalid Google profile: missing id');
-    }
-
-    const email = profile.emails?.[0]?.value;
-    if (!email) {
-      throw new UnauthorizedException('Google account has no email');
-    }
-
-    const name =
-      profile.displayName && profile.displayName.length > 0
-        ? profile.displayName
-        : undefined;
-
-    const photo = profile.photos?.[0]?.value ?? undefined;
-
-    return {
-      googleId,
-      email,
-      ...(name ? { name } : {}),
-      ...(photo ? { photo } : {}),
+    done: VerifyCallback,
+  ) {
+    const user = {
+      provider: 'google',
+      providerId: profile.id,
+      email: profile.emails?.[0]?.value,
+      name: profile.displayName,
+      photo: profile.photos?.[0]?.value,
+      accessToken,
     };
+    return done(null, user);
   }
 }
