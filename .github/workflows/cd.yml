@@ -1,4 +1,4 @@
-name: Deploy to EC2 (Staging)
+name: Deploy to EC2 (Staging) — monorepo
 
 on:
   workflow_dispatch:
@@ -23,13 +23,9 @@ concurrency:
 jobs:
   deploy:
     runs-on: ubuntu-latest
-
-    # MUY IMPORTANTE: usa el environment 'staging' para leer sus secrets/vars
     environment:
       name: staging
-      # opcional: se muestra como link en la UI de Actions
       url: ${{ vars.FRONTEND_URL }}
-
     timeout-minutes: 30
 
     steps:
@@ -40,13 +36,43 @@ jobs:
 
       - name: Sanity check (SSH)
         run: |
-          ssh -o StrictHostKeyChecking=no -i key.pem ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} \
-            "echo Connected to $(hostname) on $(uname -a)"
+          ssh -o StrictHostKeyChecking=no -i key.pem \
+            ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} \
+            'echo HOME=$HOME; hostname'
 
-      # --- Escribe/actualiza el .env del BACKEND en la EC2 ---
+      # tools + clone/update (sin mkdir del repo)
+      - name: Bootstrap EC2 (tools + clone/update)
+        run: |
+          ssh -o StrictHostKeyChecking=no -i key.pem ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << 'EOF'
+          set -euo pipefail
+          REPO_URL="https://github.com/${{ github.repository }}.git"
+          REPO_NAME="$(basename -s .git "$REPO_URL")"
+          APP_DIR="$HOME/$REPO_NAME"
+          BRANCH="${{ github.event.inputs.branch }}"
+
+          # herramientas
+          if ! command -v git  >/dev/null; then sudo apt update && sudo apt install -y git; fi
+          if ! command -v node >/dev/null; then curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash - && sudo apt install -y nodejs; fi
+          if ! command -v pm2  >/dev/null; then sudo npm i -g pm2; fi
+          if ! command -v nginx >/dev/null; then sudo apt install -y nginx; fi
+
+          # clonar si falta; si existe, actualizar
+          if [ ! -d "$APP_DIR/.git" ]; then
+            cd "$HOME"
+            git clone "$REPO_URL"
+          fi
+
+          cd "$APP_DIR"
+          git fetch origin "$BRANCH" || true
+          git checkout "$BRANCH" || git checkout -B "$BRANCH" "origin/$BRANCH"
+          git pull --ff-only origin "$BRANCH" || true
+          EOF
+
+      # .env del backend (se asume existe carpeta backend del repo)
       - name: Write backend .env on EC2
         run: |
-          cat > .env <<EOF
+          ssh -o StrictHostKeyChecking=no -i key.pem ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} \
+            'APP_DIR="$HOME/$(basename -s .git https://github.com/${{ github.repository }}.git)"; cat > "$APP_DIR/backend/.env" << "ENVEOF"
           GOOGLE_CLIENT_ID=${{ secrets.GOOGLE_CLIENT_ID }}
           GOOGLE_CLIENT_SECRET=${{ secrets.GOOGLE_CLIENT_SECRET }}
           GOOGLE_CALLBACK_URL=${{ vars.GOOGLE_CALLBACK_URL }}
@@ -54,75 +80,35 @@ jobs:
           PORT=${{ vars.PORT }}
           JWT_EXPIRES=${{ vars.JWT_EXPIRES }}
           JWT_SECRET=${{ secrets.JWT_SECRET }}
-          EOF
-          scp -o StrictHostKeyChecking=no -i key.pem .env ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}:/home/ubuntu/backend/.env
-          rm -f .env
+          ENVEOF'
 
-      # --- BACKEND ---
       - name: Deploy BACKEND
         if: ${{ github.event.inputs.deploy_backend == 'true' }}
-        env:
-          BRANCH: ${{ github.event.inputs.branch }}
         run: |
           ssh -o StrictHostKeyChecking=no -i key.pem ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << 'EOF'
           set -euo pipefail
-          BACKEND_DIR="/home/ubuntu/backend"
-          BRANCH="${{ github.event.inputs.branch }}"
-
-          # Asegura directorio/repo
-          if [ ! -d "$BACKEND_DIR/.git" ]; then
-            echo "ERROR: No existe $BACKEND_DIR/.git. Clona el repo una vez en la EC2."
-            exit 2
-          fi
-
-          cd "$BACKEND_DIR"
-          git fetch origin "$BRANCH" || true
-          git checkout "$BRANCH" || git checkout -B "$BRANCH" "origin/$BRANCH"
-          git pull --ff-only origin "$BRANCH" || true
-
-          # deps + pm2
+          APP_DIR="$HOME/$(basename -s .git https://github.com/${{ github.repository }}.git)"
+          cd "$APP_DIR/backend"
           npm ci || npm install
-          which pm2 >/dev/null 2>&1 || sudo npm i -g pm2
-          # si tu backend requiere build (TS, etc.), descomenta:
-          # npm run build
-
+          # npm run build  # si aplica
           pm2 restart backend || pm2 start npm --name backend -- start
           pm2 save
           EOF
 
-      # --- FRONTEND ---
       - name: Deploy FRONTEND
         if: ${{ github.event.inputs.deploy_frontend == 'true' }}
-        env:
-          BRANCH: ${{ github.event.inputs.branch }}
         run: |
           ssh -o StrictHostKeyChecking=no -i key.pem ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << 'EOF'
           set -euo pipefail
-          FRONTEND_DIR="/home/ubuntu/frontend"
-          NGINX_HTML="/var/www/html"
-          BRANCH="${{ github.event.inputs.branch }}"
-
-          if [ ! -d "$FRONTEND_DIR/.git" ]; then
-            echo "ERROR: No existe $FRONTEND_DIR/.git. Clona el repo una vez en la EC2."
-            exit 2
-          fi
-
-          cd "$FRONTEND_DIR"
-          git fetch origin "$BRANCH" || true
-          git checkout "$BRANCH" || git checkout -B "$BRANCH" "origin/$BRANCH"
-          git pull --ff-only origin "$BRANCH" || true
-
+          APP_DIR="$HOME/$(basename -s .git https://github.com/${{ github.repository }}.git)"
+          cd "$APP_DIR/frontend"
           npm ci || npm install
-          # Si tu build necesita envs (ej. VITE_API_URL), expórtalas aquí:
-          # VITE_API_URL="${{ vars.FRONTEND_API_URL }}" npm run build
           npm run build
-
-          sudo rm -rf "$NGINX_HTML"/*
-          sudo cp -r build/* "$NGINX_HTML"/
+          sudo rm -rf /var/www/html/*
+          sudo cp -r dist/* /var/www/html/
           sudo systemctl reload nginx || sudo systemctl restart nginx
           EOF
 
-      # --- Check rápido de salud (opcional) ---
       - name: Smoke check
         run: |
-          curl -I --max-time 10 ${{ vars.FRONTEND_URL }} || true
+          curl -I --max-time 15 ${{ vars.FRONTEND_URL }} || true
