@@ -2,13 +2,11 @@ import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import cookieParser from 'cookie-parser';
 
-// (Opcional si NO usas ConfigModule.forRoot): habilita dotenv
-// import 'dotenv/config';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
-  const frontend = process.env.FRONTEND_URL; 
+  const frontend = process.env.FRONTEND_URL;
   if (!frontend) {
     console.error('FRONTEND_URL no está configurada');
     process.exit(1);
