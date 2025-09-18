@@ -1,4 +1,4 @@
-name: Deploy to EC2 (Staging) — authVUE (env fuera del repo)
+name: Deploy to EC2 (Staging) 
 
 on:
   workflow_dispatch:
@@ -50,19 +50,19 @@ jobs:
           APP_DIR="$HOME/$REPO_NAME"
           BRANCH="${{ github.event.inputs.branch }}"
 
-          # herramientas base (idempotente)
+          # Herramientas base (idempotente)
           if ! command -v git  >/dev/null 2>&1; then sudo apt update && sudo apt install -y git; fi
           if ! command -v node >/dev/null 2>&1; then curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash - && sudo apt install -y nodejs; fi
           if ! command -v pm2  >/dev/null 2>&1; then sudo npm i -g pm2; fi
           if ! command -v nginx >/dev/null 2>&1; then sudo apt install -y nginx; fi
 
-          # clonar si falta
+          # Clonar si falta
           if [ ! -d "$APP_DIR/.git" ]; then
             cd "$HOME"
             git clone "$REPO_URL"
           fi
 
-          # dejar la rama limpia y actualizada
+          # Dejar la rama limpia y actualizada (ANTES de crear .env)
           cd "$APP_DIR"
           git fetch origin "$BRANCH" || true
           git checkout "$BRANCH" || git checkout -B "$BRANCH" "origin/$BRANCH"
@@ -70,17 +70,19 @@ jobs:
           git clean -fdx
           EOF
 
-      # ---------- .env del backend FUERA del repo + symlink ----------
-      - name: Write backend .env (outside repo) and link
+      # ---------- .env del backend (archivo directo dentro del repo) ----------
+      - name: Write backend .env on EC2 (simple)
         run: |
           ssh -o StrictHostKeyChecking=no -i key.pem ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << 'EOF'
           set -euo pipefail
           REPO_URL="https://github.com/${{ github.repository }}.git"
           APP_DIR="$HOME/$(basename -s .git "$REPO_URL")"
 
-          # Guardar secretos fuera del repo
-          sudo install -d -m 750 /etc/authvue
-          sudo tee /etc/authvue/backend.env >/dev/null <<'ENVEOF'
+          mkdir -p "$APP_DIR/backend"
+          # Si hubiera un symlink anterior, reemplázalo por archivo normal
+          rm -f "$APP_DIR/backend/.env"
+
+          cat > "$APP_DIR/backend/.env" <<'ENVEOF'
           GOOGLE_CLIENT_ID=${{ secrets.GOOGLE_CLIENT_ID }}
           GOOGLE_CLIENT_SECRET=${{ secrets.GOOGLE_CLIENT_SECRET }}
           GOOGLE_CALLBACK_URL=${{ vars.GOOGLE_CALLBACK_URL }}
@@ -89,12 +91,8 @@ jobs:
           JWT_EXPIRES=${{ vars.JWT_EXPIRES }}
           JWT_SECRET=${{ secrets.JWT_SECRET }}
           ENVEOF
-          sudo chown $USER:$USER /etc/authvue/backend.env
-          chmod 600 /etc/authvue/backend.env
 
-          # Symlink para que .env lo lea desde el repo
-          mkdir -p "$APP_DIR/backend"
-          ln -sf /etc/authvue/backend.env "$APP_DIR/backend/.env"
+          chmod 600 "$APP_DIR/backend/.env"
           EOF
 
       # ---------- BACKEND: deps (runtime) + PM2 ----------
@@ -110,10 +108,10 @@ jobs:
           # Evita husky en servidores
           export HUSKY=0
 
-          # Si NO compilas TS en servidor, instala solo deps de runtime:
+          # Si NO compilas TS aquí, instala solo deps de runtime:
           npm ci --omit=dev --no-audit --fund=false || npm install --omit=dev --no-audit --fund=false
 
-          # Si sí compilas TS, usa en su lugar:
+          # Si SÍ compilas TS en servidor, usa en su lugar:
           # npm ci --no-audit --fund=false
           # npm run build
 
@@ -131,13 +129,13 @@ jobs:
           APP_DIR="$HOME/$(basename -s .git "$REPO_URL")"
           BRANCH="${{ github.event.inputs.branch }}"
 
-          # Traer últimos cambios sin limpiar secretos/symlinks
+          # Traer últimos cambios SIN limpiar para no borrar backend/.env
           cd "$APP_DIR"
           git fetch origin "$BRANCH" || true
           git checkout "$BRANCH" || git checkout -B "$BRANCH" "origin/$BRANCH"
           git pull --ff-only origin "$BRANCH" || true
 
-          # Build del front
+          # Build del front (Vue/Vite -> dist/)
           cd "$APP_DIR/frontend"
           npm ci --no-audit --fund=false
           if npm run | grep -q "build-only"; then
