@@ -1,4 +1,4 @@
-name: Deploy to EC2 (Staging) — authVUE
+name: Deploy to EC2 (Staging) — authVUE (env fuera del repo)
 
 on:
   workflow_dispatch:
@@ -40,7 +40,7 @@ jobs:
             ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} \
             'echo HOME=$HOME; hostname; uname -a'
 
-      # Herramientas + clonar si falta + actualizar rama
+      # ---------- Herramientas + clonar si falta + dejar repo limpio ----------
       - name: Bootstrap EC2 (tools + clone/update)
         run: |
           ssh -o StrictHostKeyChecking=no -i key.pem ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << 'EOF'
@@ -70,15 +70,17 @@ jobs:
           git clean -fdx
           EOF
 
-      # .env del backend (escribe directamente en la EC2)
-      - name: Write backend .env on EC2
+      # ---------- .env del backend FUERA del repo + symlink ----------
+      - name: Write backend .env (outside repo) and link
         run: |
-          ssh -o StrictHostKeyChecking=no -i key.pem \
-            ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} \
-            'REPO_URL="https://github.com/${{ github.repository }}.git"; \
-             APP_DIR="$HOME/$(basename -s .git "$REPO_URL")"; \
-             mkdir -p "$APP_DIR/backend"; \
-             cat > "$APP_DIR/backend/.env" << "ENVEOF"
+          ssh -o StrictHostKeyChecking=no -i key.pem ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << 'EOF'
+          set -euo pipefail
+          REPO_URL="https://github.com/${{ github.repository }}.git"
+          APP_DIR="$HOME/$(basename -s .git "$REPO_URL")"
+
+          # Guardar secretos fuera del repo
+          sudo install -d -m 750 /etc/authvue
+          sudo tee /etc/authvue/backend.env >/dev/null <<'ENVEOF'
           GOOGLE_CLIENT_ID=${{ secrets.GOOGLE_CLIENT_ID }}
           GOOGLE_CLIENT_SECRET=${{ secrets.GOOGLE_CLIENT_SECRET }}
           GOOGLE_CALLBACK_URL=${{ vars.GOOGLE_CALLBACK_URL }}
@@ -86,9 +88,16 @@ jobs:
           PORT=${{ vars.PORT }}
           JWT_EXPIRES=${{ vars.JWT_EXPIRES }}
           JWT_SECRET=${{ secrets.JWT_SECRET }}
-          ENVEOF'
+          ENVEOF
+          sudo chown $USER:$USER /etc/authvue/backend.env
+          chmod 600 /etc/authvue/backend.env
 
-      # BACKEND: deps (prod) + PM2
+          # Symlink para que .env lo lea desde el repo
+          mkdir -p "$APP_DIR/backend"
+          ln -sf /etc/authvue/backend.env "$APP_DIR/backend/.env"
+          EOF
+
+      # ---------- BACKEND: deps (runtime) + PM2 ----------
       - name: Deploy BACKEND
         if: ${{ github.event.inputs.deploy_backend == 'true' }}
         run: |
@@ -98,15 +107,21 @@ jobs:
           APP_DIR="$HOME/$(basename -s .git "$REPO_URL")"
           cd "$APP_DIR/backend"
 
-          # instala sólo dep. de runtime (si tu backend NO compila TS aquí)
-          npm ci --omit=dev || npm install --omit=dev
-          # si necesitas compilar TS, usa: npm ci && npm run build
+          # Evita husky en servidores
+          export HUSKY=0
+
+          # Si NO compilas TS en servidor, instala solo deps de runtime:
+          npm ci --omit=dev --no-audit --fund=false || npm install --omit=dev --no-audit --fund=false
+
+          # Si sí compilas TS, usa en su lugar:
+          # npm ci --no-audit --fund=false
+          # npm run build
 
           pm2 restart backend || pm2 start npm --name backend -- start
           pm2 save
           EOF
 
-      # FRONTEND: build + publicar en NGINX
+      # ---------- FRONTEND: build + publicar en NGINX ----------
       - name: Deploy FRONTEND
         if: ${{ github.event.inputs.deploy_frontend == 'true' }}
         run: |
@@ -116,24 +131,22 @@ jobs:
           APP_DIR="$HOME/$(basename -s .git "$REPO_URL")"
           BRANCH="${{ github.event.inputs.branch }}"
 
-          # checkout limpio (evita residuos como index.js antiguos)
+          # Traer últimos cambios sin limpiar secretos/symlinks
           cd "$APP_DIR"
           git fetch origin "$BRANCH" || true
           git checkout "$BRANCH" || git checkout -B "$BRANCH" "origin/$BRANCH"
-          git reset --hard "origin/$BRANCH"
-          git clean -fdx
+          git pull --ff-only origin "$BRANCH" || true
 
-          # build
+          # Build del front
           cd "$APP_DIR/frontend"
           npm ci --no-audit --fund=false
-          # si tienes script "build-only" sin vue-tsc, úsalo; si no, build normal
           if npm run | grep -q "build-only"; then
             npm run build-only
           else
             npm run build
           fi
 
-          # publicar
+          # Publicar
           sudo rm -rf /var/www/html/*
           sudo rsync -av --delete dist/ /var/www/html/
           sudo nginx -t
